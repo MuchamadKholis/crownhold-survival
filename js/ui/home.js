@@ -41,6 +41,7 @@ CH.Home = (function () {
     $('sidebar').onclick = e => {
       const g = e.target.closest('[data-goal]');
       if (g) { CH.Audio.play('click'); runGoal(JSON.parse(g.dataset.goal)); return; }
+      if (e.target.closest('#tasks-toggle')) { st.tasksOpen = !tasksOpen(); CH.Audio.play('click'); refreshHud(true); return; }
       if (e.target.closest('#collect-all')) collectAll();
       if (e.target.closest('#builders-chip')) UI.sheet('buildings');
     };
@@ -79,16 +80,19 @@ CH.Home = (function () {
     if (st.hud.xp !== xp) { st.hud.xp = xp; $('hud-xp').style.width = xp + '%'; }
     // Sidebar: builders, collect, goals
     const goals = S.goals(s).slice(0, 3);
-    const sideKey = S.busy(s) + '/' + S.builders(s) + '|' + goals.map(g => g.text).join('|') + '|' + canCollect();
+    const sideKey = S.busy(s) + '/' + S.builders(s) + '|' + goals.map(g => g.text).join('|') + '|' + canCollect() + '|' + tasksOpen();
     if (st.hud.side !== sideKey || force) {
       st.hud.side = sideKey;
       $('sidebar').innerHTML =
         '<div class="side-row"><button class="chip-btn" id="builders-chip" title="Builders busy / total">' + UI.icon('hammer') + 'Builders ' + (S.builders(s) - S.busy(s)) + '/' + S.builders(s) + ' free</button>' +
         (canCollect() ? '<button class="chip-btn gold" id="collect-all">' + UI.icon('gold') + 'Collect all</button>' : '') + '</div>' +
-        (goals.length ? '<div class="goals"><h4>Next goals</h4>' + goals.map(g => '<button class="goal" data-goal=\'' + UI.esc(JSON.stringify(g)) + '\'>' + UI.esc(g.text) + '</button>').join('') + '</div>' : '');
+        (goals.length ? '<div class="goals' + (tasksOpen() ? ' open' : '') + '"><button class="goals-head" id="tasks-toggle" aria-expanded="' + tasksOpen() + '"><span>📜 Tasks</span><b>' + goals.length + '</b><i class="chev">' + (tasksOpen() ? '▴' : '▾') + '</i></button>' +
+          goals.map((g, i) => '<button class="goal' + (i === 0 ? ' first' : '') + '" data-goal=\'' + UI.esc(JSON.stringify(g)) + '\'>' + UI.esc(g.text) + '</button>').join('') + '</div>' : '');
     }
     if (st.selected) renderPanel(false);
   }
+  // Tasks start expanded on wide screens and collapsed (first task only) on phones.
+  const tasksOpen = () => (st.tasksOpen === undefined ? window.innerWidth > 760 : st.tasksOpen);
   const canCollect = () => save().buildings.some(b => B[b.type].cat === 'econ' && b.buf >= 10);
 
   /* ---------------- Selection & panel ---------------- */
