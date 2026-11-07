@@ -16,7 +16,8 @@ CH.BattleUI = (function () {
     $('bhud').classList.remove('hidden');
     $('bhud').innerHTML =
       '<div class="b-top"><button class="icon-btn" id="b-quit" title="Leave">' + UI.icon('close') + '</button><div class="bt-info" id="b-info"></div>' +
-      '<div class="b-actions"><button class="hud-pill" id="b-speed">1×</button><button class="btn btn-gold" id="b-call"></button></div></div>' +
+      '<button class="hud-pill" id="b-speed">1×</button></div>' +
+      '<button class="btn btn-gold b-call" id="b-call"></button>' +
       '<div class="b-boss hidden" id="b-boss"><span id="b-boss-name"></span><div class="bar"><i id="b-boss-bar"></i></div></div>' +
       '<div class="b-banner" id="b-banner"></div>' +
       '<div class="b-tower hidden" id="b-tower"></div>' +
@@ -28,7 +29,7 @@ CH.BattleUI = (function () {
     $('b-tower').onclick = onTowerPanel;
     renderBar(true);
     const intro = b.mode === 'raid' ? 'Raid ' + b.opponent.name : b.mode === 'defense' ? 'Endless Defense' : 'Stage ' + (b.stage.r + 1) + '-' + (b.stage.s + 1) + ': ' + b.stage.name;
-    banner(intro, b.mode === 'raid' ? 'Deploy outside the red zone' : b.mode === 'defense' ? 'Place your heroes, then start the first wave' : CH.OBJECTIVES[b.stage.obj]);
+    banner(intro, b.mode === 'raid' ? 'Deploy outside the red zone · drag to deploy a line' : b.mode === 'defense' ? 'Place your heroes, then start the first wave' : CH.OBJECTIVES[b.stage.obj] + (CH.App.view.portrait ? ' Drag to look around.' : ''));
   }
   function close() { st.b = null; $('bhud').classList.add('hidden'); $('bhud').innerHTML = ''; }
 
@@ -68,7 +69,19 @@ CH.BattleUI = (function () {
     if (!items.length) items.push('<p class="b-empty">No troops, heroes or spells. Train an army at home.</p>');
     $('b-bar').innerHTML = items.join('');
     UI.paintCanvases($('b-bar'));
+    positionCall();
   }
+  /** Keep the wave / end-battle button just above the deploy bar when they would overlap. */
+  function positionCall() {
+    const call = $('b-call'), bar = $('b-bar');
+    if (!call || !bar) return;
+    call.style.bottom = '';
+    const c = call.getBoundingClientRect(), r = bar.getBoundingClientRect();
+    const overlapX = c.left < r.right && c.right > r.left, overlapY = c.bottom > r.top - 6;
+    if (overlapX && overlapY) call.style.bottom = Math.round(window.innerHeight - r.top + 8) + 'px';
+  }
+  window.addEventListener('resize', () => setTimeout(positionCall, 50));
+
   function onBar(e) {
     const c = e.target.closest('.b-card'); if (!c || !st.b) return;
     const k = c.dataset.k, id = c.dataset.id, b = st.b;
@@ -127,7 +140,7 @@ CH.BattleUI = (function () {
   const handler = {
     tap(p) { act(p, false); },
     hover(p) { st.pointer = p; st.hoverTile = p ? { tx: Math.round(p.x / T - 1), ty: Math.round(p.y / T - 1) } : null; },
-    dragStart(p) { if (st.sel && st.sel.kind === 'troop') { st.dragLast = p; act(p, true); return true; } return false; },
+    dragStart(p) { if (st.b && st.b.mode === 'raid' && st.sel && st.sel.kind === 'troop') { st.dragLast = p; act(p, true); return true; } return false; },
     dragMove(p) { st.pointer = p; if (st.dragLast && Math.hypot(p.x - st.dragLast.x, p.y - st.dragLast.y) > 14) { st.dragLast = p; act(p, true); } },
     dragEnd() { st.dragLast = null; },
     cancel() { st.sel = null; hideTowerPanel(); renderBar(true); },
