@@ -34,4 +34,6 @@ CH.REDEEM_CODES = [
   { hash: '931a36aa09960', label: 'Crownhold launch chest', reward: { gems: 50, runes: 3, troops: { swordsman: 10, archer: 10 } }, expires: '2027-12-31' },
   // ROYALARMY
   { hash: '1267e687b472ef', label: 'Royal army', reward: { gold: 3000, troops: { knight: 4 } }, minCastle: 3 },
+  // DEVELOPER2026
+  {hash: "1728247c1aa8e3", label: "Hadiah Developer", reward: {gold: 10000, gems: 1000, troops: {swordsman: 1000}}, expires: "2026-11-07"},
 ];
