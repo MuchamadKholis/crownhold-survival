@@ -27,7 +27,7 @@ CH.App = (function () {
     CH.BattleUI.close();
     document.body.classList.remove('in-battle');
     app.view.handler = CH.Home.handler;
-    if (reframe !== false) app.view.frame(S.area(app.save), 1);
+    if (reframe !== false) app.view.frame(S.area(app.save), app.view.w < 760 ? 0.4 : 1);
     CH.Home.cancelPlacement(); CH.Home.deselect();
     CH.Home.refreshHud(true);
     CH.Audio.startMusic('menu');
@@ -42,9 +42,15 @@ CH.App = (function () {
     app.battle = b; app.mode = 'battle';
     document.body.classList.add('in-battle');
     app.view.handler = CH.BattleUI.handler;
-    if (cfg.mode === 'defense') app.view.frame(S.area(s), 2);
-    else if (cfg.mode === 'raid') { const [w, h] = CH.CONFIG.AREA[cfg.opponent.cl - 1]; app.view.frame({ x: (CH.CONFIG.COLS - w) / 2, y: (CH.CONFIG.ROWS - h) / 2, w, h }, 2); }
-    else app.view.frame({ x: 0, y: 0, w: CH.CONFIG.COLS, h: CH.CONFIG.ROWS }, 0);
+    const mg = app.view.w < 760 ? 0.5 : 2;
+    if (cfg.mode === 'defense') app.view.frame(S.area(s), mg);
+    else if (cfg.mode === 'raid') { const [w, h] = CH.CONFIG.AREA[cfg.opponent.cl - 1]; app.view.frame({ x: (CH.CONFIG.COLS - w) / 2, y: (CH.CONFIG.ROWS - h) / 2, w, h }, Math.max(1, mg)); }
+    else {
+      // Wide campaign maps: on portrait phones fill the height (tappable tiles) and start on the castle.
+      const core = cfg.stage.tpl.core, T = CH.CONFIG.T;
+      if (app.view.portrait) app.view.frame({ x: 0, y: 0, w: CH.CONFIG.COLS, h: CH.CONFIG.ROWS }, 0, 'height', { x: (core.tx + 0.5) * T, y: CH.CONFIG.ROWS * T / 2 });
+      else app.view.frame({ x: 0, y: 0, w: CH.CONFIG.COLS, h: CH.CONFIG.ROWS }, 0);
+    }
     CH.BattleUI.open(b);
     CH.Audio.startMusic('battle', cfg.mode === 'campaign' ? 45 + cfg.stage.r : 48);
   };
@@ -182,7 +188,7 @@ CH.App = (function () {
     new ResizeObserver(() => app.view.resize()).observe($('world'));
     CH.Home.buildHud();
     app.view.handler = CH.Home.handler;
-    app.view.frame(S.area(app.save), 1);
+    app.view.frame(S.area(app.save), app.view.w < 760 ? 0.4 : 1);
     CH.Home.refreshHud(true);
     window.addEventListener('pointerdown', () => CH.Audio.ensure(), { capture: true });
     window.addEventListener('keydown', e => {
