@@ -59,6 +59,24 @@ CH.View = (function () {
     A.ell(c, x + 16, y + 26, 11, 4, 'rgba(0,0,0,0.3)'); A.poly(c, [x + 5, y + 26, x + 8, y + 14, x + 16, y + 10, x + 26, y + 15, x + 28, y + 26], kind === 'snow' ? '#c6d2de' : kind === 'lava' ? '#2a1f26' : '#8a857a', 'rgba(0,0,0,0.35)', 1);
   }
 
+  /** Repeating, slightly dimmed wilderness drawn beyond the map edges so the
+   *  world never looks letterboxed on tall or wide screens. */
+  const fillerCache = {};
+  function filler(ctx, kind, pal) {
+    const key = kind + (pal ? pal.g1 : '');
+    if (!fillerCache[key]) {
+      const cv = makeCanvas(256, 256), c = cv.getContext('2d'), rnd = CH.util.rng(kind.length * 97 + 3);
+      const p = pal || { g1: '#3f7432', g2: '#4a8239', g3: '#335f29' };
+      c.fillStyle = p.g1; c.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 40; i++) { c.globalAlpha = 0.3; A.circle(c, rnd() * 256, rnd() * 256, 10 + rnd() * 30, rnd() > 0.5 ? p.g2 : p.g3); }
+      c.globalAlpha = 1;
+      for (let i = 0; i < 9; i++) sceneryPiece(c, kind, 10 + (i % 3) * 82 + rnd() * 30, 10 + Math.floor(i / 3) * 82 + rnd() * 30, rnd() * 0.6 + 0.4);
+      c.fillStyle = 'rgba(0,0,0,0.28)'; c.fillRect(0, 0, 256, 256);
+      fillerCache[key] = ctx.createPattern(cv, 'repeat');
+    }
+    return fillerCache[key];
+  }
+
   /* ---------------- Camera & input ---------------- */
   class View {
     constructor(canvas) {
@@ -81,19 +99,22 @@ CH.View = (function () {
       this.canvas.style.width = r.width + 'px'; this.canvas.style.height = r.height + 'px';
       this.base = Math.min(r.width / WW, r.height / WH);
       // Re-fit the last framed area when the screen changes size or rotates.
-      if (this.lastFrame && (Math.abs(r.width - (this.prevW || 0)) > 40 || Math.abs(r.height - (this.prevH || 0)) > 40)) this.frame(this.lastFrame.rect, this.lastFrame.margin);
+      if (this.lastFrame && (Math.abs(r.width - (this.prevW || 0)) > 40 || Math.abs(r.height - (this.prevH || 0)) > 40)) this.frame(this.lastFrame.rect, this.lastFrame.margin, this.lastFrame.fit, this.lastFrame.focus);
       this.prevW = r.width; this.prevH = r.height;
       this.clamp();
     }
     /** Frame a world rectangle (in tiles) so it fills the screen. */
-    frame(rect, margin = 1) {
-      this.lastFrame = { rect, margin };
+    /** Frame a rect (tiles). fit 'height' fills the screen height and lets the
+     *  player pan sideways (used for wide maps on portrait phones). */
+    frame(rect, margin = 1, fit = 'contain', focus = null) {
+      this.lastFrame = { rect, margin, fit, focus };
       const w = (rect.w + margin * 2) * T, h = (rect.h + margin * 2) * T;
-      const z = Math.min(this.w / w, this.h / h) / this.base;
+      const z = (fit === 'height' ? this.h / h : Math.min(this.w / w, this.h / h)) / this.base;
       this.cam.zoom = Math.max(1, Math.min(3, z));
-      this.cam.x = (rect.x + rect.w / 2) * T; this.cam.y = (rect.y + rect.h / 2) * T;
+      this.cam.x = focus ? focus.x : (rect.x + rect.w / 2) * T; this.cam.y = focus ? focus.y : (rect.y + rect.h / 2) * T;
       this.clamp();
     }
+    get portrait() { return this.h > this.w * 1.15; }
     get scale() { return this.base * this.cam.zoom; }
     clamp() {
       const s = this.scale, hw = this.w / s / 2, hh = this.h / s / 2;
@@ -150,12 +171,14 @@ CH.View = (function () {
       if (dr.moved && dr.owned) this.handler.dragEnd(w, e);
       else if (!dr.moved && this.handler && this.handler.tap) this.handler.tap(w, { pointerType: dr.type, shiftKey: e.shiftKey });
     }
-    begin(shake = 0) {
+    begin(shake = 0, kind = 'forest', pal = null) {
       const c = this.ctx, s = this.scale * this.dpr;
       c.setTransform(1, 0, 0, 1, 0, 0);
       c.fillStyle = '#16210f'; c.fillRect(0, 0, this.canvas.width, this.canvas.height);
       const sx = shake ? (Math.random() - 0.5) * shake * 10 : 0, sy = shake ? (Math.random() - 0.5) * shake * 10 : 0;
       c.setTransform(s, 0, 0, s, (this.w / 2 - this.cam.x * this.scale + sx) * this.dpr, (this.h / 2 - this.cam.y * this.scale + sy) * this.dpr);
+      c.fillStyle = filler(c, kind, pal);
+      c.fillRect(-WW * 2, -WH * 2, WW * 5, WH * 5);
       return c;
     }
   }
@@ -182,7 +205,7 @@ CH.View = (function () {
 
   /* ---------------- Home scene ---------------- */
   function drawHome(view, save, ui, time) {
-    const c = view.begin();
+    const c = view.begin(0, 'forest');
     const cl = CH.State.castleLevel(save), area = CH.State.area(save);
     c.drawImage(terrain('home' + cl, { area, seed: 11 + cl }), 0, 0);
     const list = save.buildings.slice().sort((a, b) => (a.ty + CH.BUILDINGS[a.type].size) - (b.ty + CH.BUILDINGS[b.type].size) || a.tx - b.tx);
@@ -242,7 +265,7 @@ CH.View = (function () {
   }
 
   function drawBattle(view, b, ui, time) {
-    const c = view.begin(b.shake);
+    const c = b.mode === 'campaign' ? view.begin(b.shake, b.stage.region.decor, b.stage.region.pal) : view.begin(b.shake, 'forest');
     c.drawImage(battleTerrain(b), 0, 0);
     // Raid deploy restriction overlay.
     if (ui.deployMode && b.mode === 'raid') {
